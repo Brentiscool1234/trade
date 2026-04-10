@@ -38,6 +38,30 @@ from analysis.sentiment import SentimentResult, aggregate_sentiment
 from analysis.technical import TechnicalResult, analyse as technical_analyse
 from utils.logger import get_logger
 
+# Learned adaptive params — imported lazily to avoid circular import at startup
+try:
+    from learning import params as _lp
+    _HAS_LEARNED_PARAMS = True
+except Exception:
+    _lp = None
+    _HAS_LEARNED_PARAMS = False
+
+
+def _buy_threshold() -> float:
+    return _lp.buy_threshold() if _HAS_LEARNED_PARAMS else config.BUY_SIGNAL_THRESHOLD
+
+
+def _sell_threshold() -> float:
+    return _lp.sell_threshold() if _HAS_LEARNED_PARAMS else config.SELL_SIGNAL_THRESHOLD
+
+
+def _sent_weight() -> float:
+    return _lp.sentiment_weight() if _HAS_LEARNED_PARAMS else config.SENTIMENT_WEIGHT
+
+
+def _tech_weight() -> float:
+    return _lp.technical_weight() if _HAS_LEARNED_PARAMS else config.TECHNICAL_WEIGHT
+
 log = get_logger(__name__)
 
 
@@ -92,9 +116,10 @@ def _combine(
         sources = sentiment.sources
         note_parts.append("no-technical")
     else:
+        # Use learned weights if available, falling back to config defaults
         composite = (
-            config.SENTIMENT_WEIGHT * sentiment.score
-            + config.TECHNICAL_WEIGHT * technical.score
+            _sent_weight() * sentiment.score
+            + _tech_weight() * technical.score
         )
         s_score = sentiment.score
         s_conf = sentiment.confidence
@@ -113,10 +138,10 @@ def _combine(
         composite = 0.25 * sentiment.score + 0.75 * technical.score
         note_parts.append("low-sent-conf")
 
-    # ── Step 3: determine raw action ─────────────────────────────────────────
-    if composite >= config.BUY_SIGNAL_THRESHOLD:
+    # ── Step 3: determine raw action (using learned thresholds) ──────────────
+    if composite >= _buy_threshold():
         action = Action.BUY
-    elif composite <= config.SELL_SIGNAL_THRESHOLD:
+    elif composite <= _sell_threshold():
         action = Action.SELL
     else:
         action = Action.HOLD
@@ -208,9 +233,12 @@ def generate_signals(mentions: list[dict]) -> list[TradeSignal]:
             technical_results[ticker] = r
     log.info("Technical analysis computed for %d ticker(s)", len(technical_results))
 
-    # Step 3: combine and filter
+    # Step 3: combine and filter (skip blacklisted tickers)
     signals: list[TradeSignal] = []
     for ticker in set(sentiment_results) | set(technical_results):
+        if _HAS_LEARNED_PARAMS and _lp.is_blacklisted(ticker):
+            log.info("Skipping blacklisted ticker: %s", ticker)
+            continue
         sig = _combine(
             ticker,
             sentiment_results.get(ticker),

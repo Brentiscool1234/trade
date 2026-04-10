@@ -1,6 +1,8 @@
 # Never commit secrets or runtime state
 .env
 portfolio_state.json
+trade_history.json
+learned_params.json
 trades.log
 *.log
 

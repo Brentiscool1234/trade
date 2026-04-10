@@ -173,6 +173,35 @@ def error_alert(message: str) -> None:
     ))
 
 
+def learning_report(
+    win_rate: Optional[float],
+    avg_pnl_pct: Optional[float],
+    total_trades: int,
+    changes: list[str],
+    current_params: dict,
+) -> None:
+    """Sent whenever the learning engine changes strategy parameters."""
+    change_text = "\n".join(f"• {c}" for c in changes) if changes else "_No changes_"
+    src_weights = current_params.get("source_weights", {})
+    src_str = "  ".join(f"{k}={v:.2f}" for k, v in src_weights.items()) or "—"
+    blacklist = current_params.get("blacklist", [])
+    fields = [
+        {"name": "Trades Analysed", "value": f"`{total_trades}`", "inline": True},
+        {"name": "Win Rate (last 20)", "value": f"`{win_rate:.0%}`" if win_rate is not None else "`n/a`", "inline": True},
+        {"name": "Avg P&L (last 20)", "value": f"`{avg_pnl_pct:+.2f}%`" if avg_pnl_pct is not None else "`n/a`", "inline": True},
+        {"name": "Signal Weights", "value": f"`sent={current_params['sentiment_weight']:.3f}  tech={current_params['technical_weight']:.3f}`", "inline": False},
+        {"name": "Buy Threshold", "value": f"`{current_params['buy_threshold']:.3f}`", "inline": True},
+        {"name": "Source Weights", "value": f"`{src_str}`", "inline": False},
+        {"name": "Blacklist", "value": f"`{', '.join(blacklist) or 'none'}`", "inline": True},
+    ]
+    _post(_embed(
+        title="🧠 Bot Self-Improvement Report",
+        description=f"**What changed:**\n{change_text}",
+        colour=0x7C4DFF,   # purple
+        fields=fields,
+    ))
+
+
 def startup_message(dry_run: bool) -> None:
     mode = "**DRY RUN** (no real orders)" if dry_run else "**PAPER TRADING**"
     _post(_embed(

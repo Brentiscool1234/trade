@@ -167,12 +167,22 @@ def aggregate_sentiment(mentions: list[dict]) -> dict[str, SentimentResult]:
 
         for m in ticker_mentions:
             raw = _score_text(m["text"])
-            weight = float(m.get("weight", 1.0))
+            # Base weight (from collector) × learned source-credibility multiplier
+            source = m.get("source", "unknown")
+            base_weight = float(m.get("weight", 1.0))
+            try:
+                from learning import params as lp
+                source_mult = lp.source_weight(source)
+            except Exception:
+                source_mult = 1.0
+            weight = base_weight * source_mult
             weighted_scores.append(raw * weight)
             raw_scores.append(raw)
-            sources.add(m.get("source", "unknown"))
+            sources.add(source)
 
-        total_weight = sum(float(m.get("weight", 1.0)) for m in ticker_mentions)
+        total_weight = sum(
+            float(m.get("weight", 1.0)) for m in ticker_mentions
+        )
         avg_score = sum(weighted_scores) / total_weight if total_weight else 0.0
         avg_score = max(-1.0, min(1.0, avg_score))     # clamp
 

@@ -280,6 +280,12 @@ class RiskManager:
 
     # ── Position management ───────────────────────────────────────────────────
 
+    def set_position_metadata(self, ticker: str, meta: dict) -> None:
+        """Store signal metadata in the open position (for learning on close)."""
+        if ticker in self._state.get("positions", {}):
+            self._state["positions"][ticker]["signal_meta"] = meta
+            self._save_state()
+
     def record_buy(
         self, ticker: str, qty: float, price: float, broker: str
     ) -> None:

@@ -18,11 +18,13 @@ Stop with Ctrl-C.
 import sys
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import pytz
 import schedule
 
 import config
+from learning.engine import LearningEngine
 import notifications.discord as discord
 from data.news_collector import NewsCollector
 from data.reddit_collector import RedditCollector
@@ -58,6 +60,17 @@ def _is_market_open() -> bool:
 
 # ── Bot orchestration ─────────────────────────────────────────────────────────
 
+def _hold_hours(opened_at_str: Optional[str]) -> float:
+    """Return hours elapsed since the position was opened."""
+    if not opened_at_str:
+        return 0.0
+    try:
+        opened = datetime.fromisoformat(opened_at_str)
+        return (datetime.now(timezone.utc) - opened).total_seconds() / 3600
+    except Exception:
+        return 0.0
+
+
 class TradingBot:
     def __init__(self) -> None:
         log.info("Initialising trading bot...")
@@ -68,6 +81,7 @@ class TradingBot:
         self.news = NewsCollector()
         self.reddit = RedditCollector()
         self.twitter = TwitterCollector()
+        self.learning = LearningEngine()
 
         log.info("All components initialised")
         discord.startup_message(dry_run=config.DRY_RUN)
@@ -107,6 +121,15 @@ class TradingBot:
             )
             success = trader.buy(ticker, price, atr=signal.atr)
             if success:
+                # Store signal metadata so the learning engine can audit this trade later
+                signal_meta = {
+                    "composite_score": signal.composite_score,
+                    "sentiment_score": signal.sentiment_score,
+                    "technical_score": signal.technical_score,
+                    "trend_direction": signal.trend_direction,
+                    "sources": signal.sources,
+                }
+                self.risk_manager.set_position_metadata(ticker, signal_meta)
                 pos = self.risk_manager.positions.get(ticker, {})
                 actual_price = pos.get("avg_price", price or 0)
                 actual_qty = pos.get("qty", 0)
@@ -129,10 +152,23 @@ class TradingBot:
             pos = self.risk_manager.positions[ticker]
             entry = pos.get("avg_price", 0)
             qty = pos.get("qty", 0)
+            opened_at = pos.get("opened_at")
+            signal_meta = pos.get("signal_meta", {})
             success = trader.sell(ticker, price, reason="signal")
             if success:
                 exit_price = price or entry
                 pnl = (exit_price - entry) * qty
+                hold_hours = _hold_hours(opened_at)
+                self.learning.on_trade_closed(
+                    ticker=ticker,
+                    entry_price=entry,
+                    exit_price=exit_price,
+                    qty=qty,
+                    pnl=pnl,
+                    exit_reason="sell-signal",
+                    signal_meta=signal_meta,
+                    hold_hours=hold_hours,
+                )
                 discord.trade_closed(
                     ticker=ticker,
                     qty=qty,
@@ -163,14 +199,28 @@ class TradingBot:
             reason = exit_order["reason"]
             price = exit_order["price"]
             qty = exit_order["qty"]
+            # Capture metadata BEFORE the position is deleted by sell()
             pos = self.risk_manager.positions.get(ticker, {})
             entry = pos.get("avg_price", price)
+            opened_at = pos.get("opened_at")
+            signal_meta = pos.get("signal_meta", {})
 
             is_crypto = ticker in _CRYPTO_TICKERS
             trader = self.binance if is_crypto else self.alpaca
             trader.sell(ticker, price, reason=reason)
 
             pnl = (price - entry) * qty
+            hold_hours = _hold_hours(opened_at)
+            self.learning.on_trade_closed(
+                ticker=ticker,
+                entry_price=entry,
+                exit_price=price,
+                qty=qty,
+                pnl=pnl,
+                exit_reason=reason,
+                signal_meta=signal_meta,
+                hold_hours=hold_hours,
+            )
             if "stop-loss" in reason:
                 discord.stop_loss_alert(ticker, entry, price, pnl)
             else:
@@ -245,6 +295,8 @@ class TradingBot:
         schedule.every(config.STOCK_SCAN_INTERVAL_MINUTES).minutes.do(self.run_stock_scan)
         schedule.every(config.CRYPTO_SCAN_INTERVAL_MINUTES).minutes.do(self.run_crypto_scan)
         schedule.every(1).hour.do(self.run_hourly_checks)
+        # Forced weekly deep-learning pass (even if trade count hasn't crossed threshold)
+        schedule.every(7).days.do(self.learning.run_learning_cycle)
 
         # Run immediately on startup so you don't wait 15 minutes for first signal
         log.info("Running initial scans on startup...")
