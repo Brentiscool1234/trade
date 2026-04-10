@@ -101,3 +101,36 @@ BINANCE_QUOTE_ASSET = "USDT"
 # ── Data / state file paths ──────────────────────────────────────────────────
 PORTFOLIO_STATE_FILE = "portfolio_state.json"
 TRADE_LOG_FILE = "trades.log"
+
+# ── Advanced safety & strategy parameters ────────────────────────────────────
+
+# Signal confluence: both sentiment AND technical must agree in direction.
+# Prevents entering when one indicator says buy and the other says sell.
+REQUIRE_SIGNAL_CONFLUENCE = True
+
+# Trend filter: block BUY signals when the asset is in a confirmed downtrend
+# (price below EMA50 AND EMA50 below EMA200). Only the strongest signals
+# (composite > 0.60) can override this gate.
+TREND_FILTER_ENABLED = True
+
+# Trailing stop-loss — locks in profits once a position gains enough.
+# After TRAILING_STOP_ACTIVATION_PCT gain, the stop trails TRAILING_STOP_TRAIL_PCT
+# below the highest price seen. This lets winners run while protecting gains.
+USE_TRAILING_STOP = True
+TRAILING_STOP_ACTIVATION_PCT = 0.05   # activate after 5 % gain
+TRAILING_STOP_TRAIL_PCT = 0.03        # trail 3 % below peak
+
+# Circuit breaker — pauses all NEW entries after too many consecutive losses.
+# Positions already open are still monitored and closed normally.
+CIRCUIT_BREAKER_LOSSES = 3            # trigger after 3 consecutive losses
+CIRCUIT_BREAKER_PAUSE_HOURS = 24      # pause duration (hours)
+
+# ATR-based position sizing — adjusts position size inversely to volatility.
+# High-volatility assets get smaller positions; capped at MAX_POSITION_SIZE_PCT.
+USE_ATR_SIZING = True
+ATR_RISK_PER_TRADE = 0.01             # risk 1 % of portfolio value per trade
+ATR_STOP_MULTIPLIER = 2.0             # stop is placed 2×ATR below entry
+
+# Minimum hold time — prevents signal-driven sells within N minutes of entry.
+# Stop-loss and take-profit exits are NOT gated by this.
+MIN_HOLD_MINUTES = 60

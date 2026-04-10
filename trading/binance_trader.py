@@ -105,13 +105,13 @@ class BinanceTrader:
 
     # ── Trade execution ───────────────────────────────────────────────────────
 
-    def buy(self, ticker: str, price: Optional[float] = None) -> bool:
+    def buy(self, ticker: str, price: Optional[float] = None, atr: float = 0.0) -> bool:
         price = price or self.get_price(ticker)
         if not price:
             log.warning("Cannot buy %s — price unavailable", ticker)
             return False
 
-        approved, reason, qty_raw = self._rm.approve_buy(ticker, price)
+        approved, reason, qty_raw = self._rm.approve_buy(ticker, price, atr=atr)
         if not approved:
             log.info("BUY rejected [%s]: %s", ticker, reason)
             return False
@@ -158,7 +158,8 @@ class BinanceTrader:
             return False
 
     def sell(self, ticker: str, price: Optional[float] = None, reason: str = "signal") -> bool:
-        approved, msg = self._rm.approve_sell(ticker)
+        from_signal = reason == "signal"
+        approved, msg = self._rm.approve_sell(ticker, from_signal=from_signal)
         if not approved:
             log.info("SELL rejected [%s]: %s", ticker, msg)
             return False

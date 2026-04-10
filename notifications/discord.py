@@ -149,10 +149,13 @@ def portfolio_summary(summary: dict) -> None:
             f"**{p['ticker']}** — {p['qty']:.4f} @ ${p['avg_price']:.4f} | {pnl_str}"
         )
     description = "\n".join(pos_lines) if pos_lines else "_No open positions_"
+    cb = "🚨 ACTIVE" if summary.get("circuit_breaker_active") else "✅ Off"
     fields = [
         {"name": "Cash", "value": f"`${summary['cash']:,.2f}`", "inline": True},
         {"name": "Portfolio Value", "value": f"`${summary['portfolio_value']:,.2f}`", "inline": True},
         {"name": "Daily P&L", "value": f"`${summary['daily_pnl']:+,.2f}`", "inline": True},
+        {"name": "Consec. Losses", "value": f"`{summary.get('consecutive_losses', 0)}`", "inline": True},
+        {"name": "Circuit Breaker", "value": f"`{cb}`", "inline": True},
     ]
     _post(_embed(
         title="📊 Portfolio Summary",

@@ -99,11 +99,13 @@ class TradingBot:
 
         if signal.action == Action.BUY:
             log.info(
-                "Executing BUY signal: %s  score=%.3f  sent=%.3f  tech=%.3f",
+                "Executing BUY signal: %s  score=%.3f  sent=%.3f  tech=%.3f  "
+                "trend=%s  atr=%.4f  notes=%s",
                 ticker, signal.composite_score,
                 signal.sentiment_score, signal.technical_score,
+                signal.trend_direction, signal.atr, signal.notes or "—",
             )
-            success = trader.buy(ticker, price)
+            success = trader.buy(ticker, price, atr=signal.atr)
             if success:
                 pos = self.risk_manager.positions.get(ticker, {})
                 actual_price = pos.get("avg_price", price or 0)
@@ -220,9 +222,12 @@ class TradingBot:
             summary = self.risk_manager.summary()
             discord.portfolio_summary(summary)
             log.info(
-                "Portfolio — cash=$%.2f  daily_pnl=$%.2f  positions=%d",
+                "Portfolio — cash=$%.2f  daily_pnl=$%.2f  positions=%d  "
+                "consec_losses=%d  circuit_breaker=%s",
                 summary["cash"], summary["daily_pnl"],
                 len(summary["open_positions"]),
+                summary["consecutive_losses"],
+                summary["circuit_breaker_active"],
             )
         except Exception as exc:
             log.error("Hourly check error: %s", exc, exc_info=True)

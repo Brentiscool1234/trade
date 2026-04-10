@@ -84,9 +84,10 @@ class AlpacaTrader:
 
     # ── Trade execution ───────────────────────────────────────────────────────
 
-    def buy(self, ticker: str, price: Optional[float] = None) -> bool:
+    def buy(self, ticker: str, price: Optional[float] = None, atr: float = 0.0) -> bool:
         """
         Submit a fractional-share market BUY order.
+        *atr* is passed from the TradeSignal for ATR-based position sizing.
         Returns True if the order was submitted (or logged in DRY_RUN).
         """
         price = price or self.get_price(ticker)
@@ -94,7 +95,7 @@ class AlpacaTrader:
             log.warning("Cannot buy %s — price unavailable", ticker)
             return False
 
-        approved, reason, qty = self._rm.approve_buy(ticker, price)
+        approved, reason, qty = self._rm.approve_buy(ticker, price, atr=atr)
         if not approved:
             log.info("BUY rejected [%s]: %s", ticker, reason)
             return False
@@ -135,7 +136,8 @@ class AlpacaTrader:
 
     def sell(self, ticker: str, price: Optional[float] = None, reason: str = "signal") -> bool:
         """Close the position for *ticker*."""
-        approved, msg = self._rm.approve_sell(ticker)
+        from_signal = reason == "signal"
+        approved, msg = self._rm.approve_sell(ticker, from_signal=from_signal)
         if not approved:
             log.info("SELL rejected [%s]: %s", ticker, msg)
             return False
