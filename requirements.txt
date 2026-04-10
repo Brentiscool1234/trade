@@ -1,0 +1,30 @@
+# Core
+python-dotenv==1.0.1
+schedule==1.2.2
+requests==2.32.3
+
+# Data Collection
+praw==7.7.1
+tweepy==4.14.0
+newsapi-python==0.2.7
+feedparser==6.0.11
+
+# Financial Data & Technical Analysis
+yfinance==0.2.54
+pandas==2.2.3
+numpy==1.26.4
+pandas-ta==0.3.14b0
+
+# Sentiment Analysis (lightweight, default)
+vaderSentiment==3.3.2
+
+# Trading APIs
+alpaca-py==0.34.0
+python-binance==1.0.19
+
+# Utilities
+pytz==2024.1
+
+# Optional: FinBERT (better sentiment — uncomment if desired)
+# transformers==4.40.0
+# torch==2.3.0
